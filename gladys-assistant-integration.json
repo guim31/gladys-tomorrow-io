@@ -1,177 +1,645 @@
 {
   "manifest_version": 1,
   "type": "device",
-  "name": "Demo Devices Template",
+  "name": "Tomorrow.io",
   "description": {
-    "en": "Starter template showing sensors, a switch, a dimmable light and a smart plug.",
-    "fr": "Template de démarrage : capteurs, interrupteur, lampe variable et prise connectée."
+    "en": "Hyperlocal Tomorrow.io weather: forecasts, rain minute by minute, air quality and pollen.",
+    "fr": "Météo hyperlocale Tomorrow.io : prévisions, pluie à la minute, qualité de l'air et pollens.",
+    "de": "Hyperlokales Wetter von Tomorrow.io: Vorhersagen, Regen pro Minute, Luftqualität und Pollen.",
+    "es": "Tiempo hiperlocal de Tomorrow.io: previsiones, lluvia por minuto, calidad del aire y polen."
   },
   "version": "1.0.0",
-  "docker_image": "ghcr.io/gladysassistant/integration-template-js:1.0.0",
+  "docker_image": "ghcr.io/guim31/gladys-tomorrow-io:1.0.0",
   "gladys_version": ">=5.1.0",
-  "cover_image": "https://raw.githubusercontent.com/GladysAssistant/integration-template-js/master/cover.png",
-  "categories": ["lighting", "security", "environment"],
-  "transports": ["local", "cloud"],
+  "cover_image": "https://raw.githubusercontent.com/guim31/gladys-tomorrow-io/main/cover.png",
+  "categories": ["environment"],
+  "transports": ["cloud"],
+  "location": true,
   "config_schema": [
     {
       "key": "intro",
       "type": "section",
-      "label": { "en": "Getting started", "fr": "Pour commencer" },
+      "label": {
+        "en": "Getting started",
+        "fr": "Pour commencer",
+        "de": "Erste Schritte",
+        "es": "Primeros pasos"
+      },
       "description": {
-        "en": "The demo weather station reads real data from the free Open-Meteo API: pick the coordinates to observe. No account, no API key.",
-        "fr": "La station météo de démonstration lit de vraies données via l'API gratuite Open-Meteo : choisissez les coordonnées à observer. Pas de compte, pas de clé d'API."
+        "en": "Create a free Tomorrow.io account and copy its API key below. The free plan allows 500 calls a day and 25 an hour: each place costs 2 calls per reading, the interval is stretched to fit. Not affiliated with Tomorrow.io.",
+        "fr": "Créez un compte Tomorrow.io gratuit et copiez sa clé d'API ci-dessous. L'offre gratuite permet 500 appels par jour et 25 par heure : chaque lieu coûte 2 appels par relevé, l'intervalle s'allonge pour tenir. Sans lien avec Tomorrow.io.",
+        "de": "Lege ein kostenloses Tomorrow.io-Konto an und kopiere seinen API-Schlüssel hierher. Der kostenlose Tarif erlaubt 500 Aufrufe pro Tag und 25 pro Stunde: jeder Ort kostet 2 Aufrufe pro Abfrage, das Intervall wird angepasst. Nicht mit Tomorrow.io verbunden.",
+        "es": "Cree una cuenta gratuita de Tomorrow.io y copie su clave de API a continuación. El plan gratuito permite 500 llamadas al día y 25 por hora: cada lugar cuesta 2 llamadas por lectura, el intervalo se alarga para cumplirlo. Sin relación con Tomorrow.io."
       },
       "links": [
         {
-          "url": "https://open-meteo.com/en/docs",
-          "label": { "en": "Open-Meteo documentation", "fr": "Documentation Open-Meteo" }
+          "url": "https://app.tomorrow.io/development/keys",
+          "label": {
+            "en": "Get an API key",
+            "fr": "Obtenir une clé d'API",
+            "de": "API-Schlüssel holen",
+            "es": "Obtener una clave de API"
+          }
+        },
+        {
+          "url": "https://docs.tomorrow.io/reference/welcome",
+          "label": {
+            "en": "Tomorrow.io API documentation",
+            "fr": "Documentation de l'API Tomorrow.io",
+            "de": "Dokumentation der Tomorrow.io-API",
+            "es": "Documentación de la API de Tomorrow.io"
+          }
         }
       ]
     },
     {
-      "key": "latitude",
-      "type": "number",
-      "label": { "en": "Latitude", "fr": "Latitude" },
-      "description": {
-        "en": "Latitude used for the demo weather sensor.",
-        "fr": "Latitude utilisée par le capteur météo de démonstration."
+      "key": "api_key",
+      "type": "secret",
+      "label": {
+        "en": "API key",
+        "fr": "Clé d'API",
+        "de": "API-Schlüssel",
+        "es": "Clave de API"
       },
-      "placeholder": { "en": "e.g. 48.8566", "fr": "ex. 48.8566" },
-      "required": true,
-      "default": 48.8566,
-      "min": -90,
-      "max": 90
+      "required": true
     },
     {
-      "key": "longitude",
-      "type": "number",
-      "label": { "en": "Longitude", "fr": "Longitude" },
-      "description": {
-        "en": "Longitude used for the demo weather sensor.",
-        "fr": "Longitude utilisée par le capteur météo de démonstration."
-      },
-      "placeholder": { "en": "e.g. 2.3522", "fr": "ex. 2.3522" },
-      "required": true,
-      "default": 2.3522,
-      "min": -180,
-      "max": 180
-    },
-    {
-      "key": "unit",
+      "key": "location_mode",
       "type": "select",
-      "label": { "en": "Temperature unit", "fr": "Unité de température" },
+      "label": {
+        "en": "Places to read",
+        "fr": "Lieux à relever",
+        "de": "Abzufragende Orte",
+        "es": "Lugares que leer"
+      },
+      "description": {
+        "en": "One device per place. A house needs its location set on the Gladys map.",
+        "fr": "Un appareil par lieu. Une maison doit être placée sur la carte de Gladys.",
+        "de": "Ein Gerät pro Ort. Ein Haus braucht seinen Standort auf der Gladys-Karte.",
+        "es": "Un dispositivo por lugar. Una casa necesita su ubicación en el mapa de Gladys."
+      },
       "required": false,
-      "default": "celsius",
+      "default": "houses",
       "options": [
-        { "value": "celsius", "label": { "en": "Celsius", "fr": "Celsius" } },
-        { "value": "fahrenheit", "label": { "en": "Fahrenheit", "fr": "Fahrenheit" } }
+        {
+          "value": "houses",
+          "label": {
+            "en": "The houses of Gladys",
+            "fr": "Les maisons de Gladys",
+            "de": "Die Häuser von Gladys",
+            "es": "Las casas de Gladys"
+          }
+        },
+        {
+          "value": "coordinates",
+          "label": {
+            "en": "The coordinates below",
+            "fr": "Les coordonnées ci-dessous",
+            "de": "Die Koordinaten unten",
+            "es": "Las coordenadas de abajo"
+          }
+        },
+        {
+          "value": "both",
+          "label": {
+            "en": "Both",
+            "fr": "Les deux",
+            "de": "Beides",
+            "es": "Ambos"
+          }
+        }
       ]
     },
     {
-      "key": "poll_frequency",
-      "type": "number",
-      "label": { "en": "Refresh interval (s)", "fr": "Intervalle de rafraîchissement (s)" },
-      "description": {
-        "en": "How often sensors are polled, in seconds (one minute minimum).",
-        "fr": "Fréquence d'interrogation des capteurs, en secondes (une minute minimum)."
+      "key": "location_name",
+      "type": "string",
+      "label": {
+        "en": "Name of the place",
+        "fr": "Nom du lieu",
+        "de": "Name des Orts",
+        "es": "Nombre del lugar"
       },
       "required": false,
-      "default": 300,
-      "min": 60,
-      "max": 3600
+      "placeholder": {
+        "en": "e.g. Holiday home",
+        "fr": "ex. Maison de vacances",
+        "de": "z. B. Ferienhaus",
+        "es": "p. ej. Casa de vacaciones"
+      }
+    },
+    {
+      "key": "latitude",
+      "type": "string",
+      "label": {
+        "en": "Latitude",
+        "fr": "Latitude",
+        "de": "Breitengrad",
+        "es": "Latitud"
+      },
+      "required": false,
+      "description": {
+        "en": "Decimal degrees, comma or point.",
+        "fr": "Degrés décimaux, virgule ou point.",
+        "de": "Dezimalgrad, Komma oder Punkt.",
+        "es": "Grados decimales, coma o punto."
+      },
+      "placeholder": {
+        "en": "e.g. 48.8566",
+        "fr": "ex. 48,8566",
+        "de": "z. B. 48,8566",
+        "es": "p. ej. 40,4168"
+      }
+    },
+    {
+      "key": "longitude",
+      "type": "string",
+      "label": {
+        "en": "Longitude",
+        "fr": "Longitude",
+        "de": "Längengrad",
+        "es": "Longitud"
+      },
+      "required": false,
+      "description": {
+        "en": "Decimal degrees, comma or point.",
+        "fr": "Degrés décimaux, virgule ou point.",
+        "de": "Dezimalgrad, Komma oder Punkt.",
+        "es": "Grados decimales, coma o punto."
+      },
+      "placeholder": {
+        "en": "e.g. 2.3522",
+        "fr": "ex. 2,3522",
+        "de": "z. B. 2,3522",
+        "es": "p. ej. -3,7038"
+      }
+    },
+    {
+      "key": "refresh_minutes",
+      "type": "select",
+      "label": {
+        "en": "Refresh interval",
+        "fr": "Intervalle de relève",
+        "de": "Abfrageintervall",
+        "es": "Intervalo de lectura"
+      },
+      "description": {
+        "en": "Stretched automatically when the places would exceed the quota.",
+        "fr": "Allongé automatiquement si les lieux dépassaient le quota.",
+        "de": "Wird automatisch verlängert, wenn die Orte das Kontingent überschreiten würden.",
+        "es": "Se alarga automáticamente si los lugares superaran la cuota."
+      },
+      "required": false,
+      "default": "15",
+      "options": [
+        {
+          "value": "15",
+          "label": {
+            "en": "15 min",
+            "fr": "15 min",
+            "de": "15 Min.",
+            "es": "15 min"
+          }
+        },
+        {
+          "value": "20",
+          "label": {
+            "en": "20 min",
+            "fr": "20 min",
+            "de": "20 Min.",
+            "es": "20 min"
+          }
+        },
+        {
+          "value": "30",
+          "label": {
+            "en": "30 min",
+            "fr": "30 min",
+            "de": "30 Min.",
+            "es": "30 min"
+          }
+        },
+        {
+          "value": "60",
+          "label": {
+            "en": "60 min",
+            "fr": "60 min",
+            "de": "60 Min.",
+            "es": "60 min"
+          }
+        }
+      ]
+    },
+    {
+      "key": "premium_layers",
+      "type": "boolean",
+      "label": {
+        "en": "Air quality and pollen (paid plan)",
+        "fr": "Qualité de l'air et pollens (offre payante)",
+        "de": "Luftqualität und Pollen (kostenpflichtig)",
+        "es": "Calidad del aire y polen (plan de pago)"
+      },
+      "description": {
+        "en": "Premium Tomorrow.io layers, absent from the free plan: one more call per reading.",
+        "fr": "Couches premium de Tomorrow.io, absentes de l'offre gratuite : un appel de plus par relevé.",
+        "de": "Premium-Ebenen von Tomorrow.io, nicht im kostenlosen Tarif: ein Aufruf mehr pro Abfrage.",
+        "es": "Capas premium de Tomorrow.io, ausentes del plan gratuito: una llamada más por lectura."
+      },
+      "required": false,
+      "default": false
+    },
+    {
+      "key": "daily_limit",
+      "type": "number",
+      "label": {
+        "en": "Calls allowed per day",
+        "fr": "Appels permis par jour",
+        "de": "Erlaubte Aufrufe pro Tag",
+        "es": "Llamadas permitidas al día"
+      },
+      "description": {
+        "en": "500 with the free plan.",
+        "fr": "500 avec l'offre gratuite.",
+        "de": "500 im kostenlosen Tarif.",
+        "es": "500 con el plan gratuito."
+      },
+      "required": false,
+      "default": 500,
+      "min": 1,
+      "max": 1000000
+    },
+    {
+      "key": "hourly_limit",
+      "type": "number",
+      "label": {
+        "en": "Calls allowed per hour",
+        "fr": "Appels permis par heure",
+        "de": "Erlaubte Aufrufe pro Stunde",
+        "es": "Llamadas permitidas por hora"
+      },
+      "description": {
+        "en": "25 with the free plan.",
+        "fr": "25 avec l'offre gratuite.",
+        "de": "25 im kostenlosen Tarif.",
+        "es": "25 con el plan gratuito."
+      },
+      "required": false,
+      "default": 25,
+      "min": 1,
+      "max": 100000
+    },
+    {
+      "key": "language",
+      "type": "select",
+      "label": {
+        "en": "Language of the feature names and texts",
+        "fr": "Langue des noms et des textes",
+        "de": "Sprache der Namen und Texte",
+        "es": "Idioma de los nombres y textos"
+      },
+      "required": false,
+      "default": "fr",
+      "options": [
+        {
+          "value": "en",
+          "label": {
+            "en": "English",
+            "fr": "Anglais",
+            "de": "Englisch",
+            "es": "Inglés"
+          }
+        },
+        {
+          "value": "fr",
+          "label": {
+            "en": "French",
+            "fr": "Français",
+            "de": "Französisch",
+            "es": "Francés"
+          }
+        },
+        {
+          "value": "de",
+          "label": {
+            "en": "German",
+            "fr": "Allemand",
+            "de": "Deutsch",
+            "es": "Alemán"
+          }
+        },
+        {
+          "value": "es",
+          "label": {
+            "en": "Spanish",
+            "fr": "Espagnol",
+            "de": "Spanisch",
+            "es": "Español"
+          }
+        }
+      ]
     }
   ],
   "actions": [
     {
-      "key": "test_weather",
-      "label": { "en": "Test the weather provider", "fr": "Tester le fournisseur météo" },
+      "key": "test_connection",
+      "label": {
+        "en": "Test the API key",
+        "fr": "Tester la clé d'API",
+        "de": "API-Schlüssel testen",
+        "es": "Probar la clave de API"
+      },
       "timeout_seconds": 30
-    },
-    {
-      "key": "identify",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "fields": [
-        {
-          "key": "device",
-          "type": "select",
-          "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
-          "required": true
-        }
-      ]
     }
   ],
   "scene_triggers": [
     {
-      "key": "motion_detected",
-      "label": { "en": "Motion detected", "fr": "Mouvement détecté" },
+      "key": "rain_expected",
+      "label": {
+        "en": "Rain expected soon (Tomorrow.io)",
+        "fr": "Pluie attendue bientôt (Tomorrow.io)",
+        "de": "Regen bald erwartet (Tomorrow.io)",
+        "es": "Lluvia prevista pronto (Tomorrow.io)"
+      },
       "description": {
-        "en": "A demo motion sensor saw a person or an animal move.",
-        "fr": "Un détecteur de démonstration a vu bouger une personne ou un animal."
+        "en": "Rain will start within the chosen number of minutes at a place, or it just started.",
+        "fr": "La pluie commencera dans le nombre de minutes choisi sur un lieu, ou vient de commencer.",
+        "de": "Der Regen beginnt an einem Ort innerhalb der gewählten Minuten oder hat gerade begonnen.",
+        "es": "La lluvia empezará en un lugar dentro de los minutos elegidos, o acaba de empezar."
       },
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Sensor", "fr": "Détecteur" }
+          "label": {
+            "en": "Place",
+            "fr": "Lieu",
+            "de": "Ort",
+            "es": "Lugar"
+          },
+          "required": false
         },
         {
-          "key": "target",
-          "type": "multi_select",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" },
+          "key": "within",
+          "type": "select",
+          "label": {
+            "en": "Within",
+            "fr": "D'ici",
+            "de": "Innerhalb von",
+            "es": "Dentro de"
+          },
+          "required": true,
+          "default": "30",
           "options": [
-            { "value": "person", "label": { "en": "Person", "fr": "Personne" } },
-            { "value": "animal", "label": { "en": "Animal", "fr": "Animal" } }
+            {
+              "value": "15",
+              "label": {
+                "en": "15 minutes",
+                "fr": "15 minutes",
+                "de": "15 Minuten",
+                "es": "15 minutos"
+              }
+            },
+            {
+              "value": "30",
+              "label": {
+                "en": "30 minutes",
+                "fr": "30 minutes",
+                "de": "30 Minuten",
+                "es": "30 minutos"
+              }
+            },
+            {
+              "value": "60",
+              "label": {
+                "en": "60 minutes",
+                "fr": "60 minutes",
+                "de": "60 Minuten",
+                "es": "60 minutos"
+              }
+            }
           ]
         }
       ],
       "variables": [
         {
-          "key": "target",
+          "key": "place",
           "type": "string",
-          "label": { "en": "What moved", "fr": "Ce qui a bougé" }
+          "label": {
+            "en": "Place",
+            "fr": "Lieu",
+            "de": "Ort",
+            "es": "Lugar"
+          }
+        },
+        {
+          "key": "minutes",
+          "type": "number",
+          "label": {
+            "en": "Minutes before the rain",
+            "fr": "Minutes avant la pluie",
+            "de": "Minuten bis zum Regen",
+            "es": "Minutos antes de la lluvia"
+          }
+        },
+        {
+          "key": "intensity",
+          "type": "number",
+          "label": {
+            "en": "Peak intensity (mm/h)",
+            "fr": "Intensité max. (mm/h)",
+            "de": "Max. Intensität (mm/h)",
+            "es": "Intensidad máx. (mm/h)"
+          }
+        },
+        {
+          "key": "probability",
+          "type": "number",
+          "label": {
+            "en": "Chance of rain (%)",
+            "fr": "Probabilité de pluie (%)",
+            "de": "Regenwahrscheinlichkeit (%)",
+            "es": "Probabilidad de lluvia (%)"
+          }
         }
       ]
     }
   ],
   "scene_actions": [
     {
-      "key": "identify_device",
-      "label": { "en": "Identify a device", "fr": "Identifier un appareil" },
-      "description": {
-        "en": "Make a device signal itself (the demo light blinks).",
-        "fr": "Fait se signaler un appareil (la lampe de démonstration clignote)."
+      "key": "get_forecast",
+      "label": {
+        "en": "Read the Tomorrow.io forecast",
+        "fr": "Lire la prévision Tomorrow.io",
+        "de": "Tomorrow.io-Vorhersage lesen",
+        "es": "Leer la previsión de Tomorrow.io"
       },
-      "timeout_seconds": 15,
+      "description": {
+        "en": "The forecast of today or tomorrow at a place, for the next actions (a message, a condition).",
+        "fr": "La prévision du jour ou du lendemain sur un lieu, pour les actions suivantes (message, condition).",
+        "de": "Die Vorhersage für heute oder morgen an einem Ort, für die nächsten Aktionen (Nachricht, Bedingung).",
+        "es": "La previsión de hoy o mañana en un lugar, para las acciones siguientes (mensaje, condición)."
+      },
+      "timeout_seconds": 10,
       "fields": [
         {
           "key": "device",
           "type": "select",
           "source": "devices",
-          "label": { "en": "Device", "fr": "Appareil" },
+          "label": {
+            "en": "Place",
+            "fr": "Lieu",
+            "de": "Ort",
+            "es": "Lugar"
+          },
           "required": true
+        },
+        {
+          "key": "day",
+          "type": "select",
+          "label": {
+            "en": "Day",
+            "fr": "Jour",
+            "de": "Tag",
+            "es": "Día"
+          },
+          "required": false,
+          "default": "today",
+          "options": [
+            {
+              "value": "today",
+              "label": {
+                "en": "Today",
+                "fr": "Aujourd'hui",
+                "de": "Heute",
+                "es": "Hoy"
+              }
+            },
+            {
+              "value": "tomorrow",
+              "label": {
+                "en": "Tomorrow",
+                "fr": "Demain",
+                "de": "Morgen",
+                "es": "Mañana"
+              }
+            }
+          ]
         }
       ],
       "outputs": [
         {
-          "key": "signalled",
-          "type": "boolean",
-          "label": { "en": "Device signalled", "fr": "Appareil signalé" }
+          "key": "summary",
+          "type": "string",
+          "label": {
+            "en": "Summary",
+            "fr": "Résumé",
+            "de": "Zusammenfassung",
+            "es": "Resumen"
+          }
+        },
+        {
+          "key": "condition",
+          "type": "string",
+          "label": {
+            "en": "Weather",
+            "fr": "Temps",
+            "de": "Wetter",
+            "es": "Tiempo"
+          }
+        },
+        {
+          "key": "temperature_min",
+          "type": "number",
+          "label": {
+            "en": "Minimum temperature (°C)",
+            "fr": "Température minimale (°C)",
+            "de": "Tiefsttemperatur (°C)",
+            "es": "Temperatura mínima (°C)"
+          }
+        },
+        {
+          "key": "temperature_max",
+          "type": "number",
+          "label": {
+            "en": "Maximum temperature (°C)",
+            "fr": "Température maximale (°C)",
+            "de": "Höchsttemperatur (°C)",
+            "es": "Temperatura máxima (°C)"
+          }
+        },
+        {
+          "key": "precipitation_probability",
+          "type": "number",
+          "label": {
+            "en": "Chance of rain (%)",
+            "fr": "Probabilité de pluie (%)",
+            "de": "Regenwahrscheinlichkeit (%)",
+            "es": "Probabilidad de lluvia (%)"
+          }
         }
       ]
     }
   ],
   "widgets": [
     {
-      "key": "demo_status",
-      "label": { "en": "Demo status", "fr": "État de la démo" },
-      "description": {
-        "en": "Live temperature and plug power, plug connection and observed location.",
-        "fr": "Température et puissance en direct, connexion de la prise, position observée."
+      "key": "forecast",
+      "label": {
+        "en": "Tomorrow.io forecast",
+        "fr": "Prévisions Tomorrow.io",
+        "de": "Tomorrow.io-Vorhersage",
+        "es": "Previsión Tomorrow.io"
       },
-      "icon": "activity",
-      "action_timeout_seconds": 15
+      "description": {
+        "en": "Weather now, the next days, rain within the hour, air quality and pollen.",
+        "fr": "Le temps actuel, les jours suivants, la pluie dans l'heure, l'air et les pollens.",
+        "de": "Wetter jetzt, die nächsten Tage, Regen in der Stunde, Luftqualität und Pollen.",
+        "es": "El tiempo actual, los próximos días, la lluvia en la hora, el aire y el polen."
+      },
+      "icon": "cloud",
+      "settings": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Place",
+            "fr": "Lieu",
+            "de": "Ort",
+            "es": "Lugar"
+          },
+          "required": true
+        }
+      ]
+    },
+    {
+      "key": "rain",
+      "label": {
+        "en": "Rain next hour",
+        "fr": "Pluie dans l'heure",
+        "de": "Regen nächste Stunde",
+        "es": "Lluvia próxima hora"
+      },
+      "description": {
+        "en": "Minute-by-minute precipitation of the next hour at a place.",
+        "fr": "Les précipitations minute par minute de l'heure à venir sur un lieu.",
+        "de": "Niederschlag Minute für Minute in der nächsten Stunde an einem Ort.",
+        "es": "La precipitación minuto a minuto de la próxima hora en un lugar."
+      },
+      "icon": "cloud-rain",
+      "settings": [
+        {
+          "key": "device",
+          "type": "select",
+          "source": "devices",
+          "label": {
+            "en": "Place",
+            "fr": "Lieu",
+            "de": "Ort",
+            "es": "Lugar"
+          },
+          "required": true
+        }
+      ]
     }
   ]
 }

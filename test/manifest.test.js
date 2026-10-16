@@ -7,10 +7,11 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
-import { DEVICE_BLUEPRINTS, SCENE_TRIGGER_KEYS } from '../src/devices/index.js';
-import { SCENE_ACTIONS } from '../src/scenes.js';
-import { WIDGETS } from '../src/widgets.js';
-import { DEFAULT_CONFIG } from '../src/config.js';
+import { createFakeGladys } from '@gladysassistant/integration-sdk/testing';
+import { createApp, SCENE_ACTION, TEST_ACTION } from '../src/app.js';
+import { RAIN_TRIGGER } from '../src/rain.js';
+import { WIDGET } from '../src/widgets.js';
+import { DEFAULT_CONFIG, LANGUAGES, LOCATION_MODES, REFRESH_MINUTES } from '../src/config.js';
 
 const manifest = JSON.parse(
   await readFile(new URL('../gladys-assistant-integration.json', import.meta.url), 'utf8'),
@@ -29,8 +30,24 @@ const allFields = [
   ...(manifest.widgets ?? []).flatMap((widget) => widget.settings ?? []),
 ];
 
-// Actions registered outside the blueprints (see index.js).
-const REGISTRY_LEVEL_ACTIONS = ['identify'];
+// The handlers the app registers, read from a fake Gladys: what the core
+// would reach. A declared key without handler answers "not implemented".
+const registered = await (async () => {
+  const gladys = createFakeGladys();
+  const app = createApp({
+    gladys,
+    store: { load: async () => ({}), save: async () => {} },
+    timers: false,
+  });
+  app.register();
+  const probe = async (call) => (await call).error !== 'not implemented';
+  return {
+    action: (key) => probe(gladys.fake.action(key, {})),
+    sceneAction: (key) => probe(gladys.fake.sceneAction(key, {})),
+    widget: (key) =>
+      probe(gladys.fake.widgetGet(key, { settings: {}, language: 'en', units: 'metric' })),
+  };
+})();
 
 // Manifest fields older Gladys releases reject as unknown, with the first
 // release accepting them. The store validator refuses a manifest whose
@@ -57,13 +74,10 @@ function isAtLeast(version, required) {
   return true;
 }
 
-test('every manifest action has a registered handler', () => {
-  const handled = new Set([
-    ...DEVICE_BLUEPRINTS.flatMap((bp) => Object.keys(bp.actions ?? {})),
-    ...REGISTRY_LEVEL_ACTIONS,
-  ]);
-  for (const action of manifest.actions ?? []) {
-    assert.ok(handled.has(action.key), `manifest action "${action.key}" has no handler`);
+test('every manifest action has a registered handler', async () => {
+  assert.deepEqual(keysOf(manifest.actions), [TEST_ACTION]);
+  for (const key of keysOf(manifest.actions)) {
+    assert.ok(await registered.action(key), `manifest action "${key}" has no handler`);
   }
 });
 
@@ -82,43 +96,49 @@ test('declaring catalog categories requires Gladys >= 4.86.0', () => {
 
 test('declaring scene triggers, scene actions or widgets requires Gladys >= 5.1.0', () => {
   const declared = CAPABILITY_FIELDS.filter((field) => manifest[field] !== undefined);
-  assert.ok(declared.length > 0, 'the template demonstrates the capability fields');
+  assert.ok(declared.length > 0, 'the integration declares capability fields');
   assert.ok(
     isAtLeast(minGladysVersion(), CAPABILITY_MIN_GLADYS_VERSION),
     `${declared.join(', ')} requires gladys_version >= 5.1.0, got "${manifest.gladys_version}"`,
   );
 });
 
-test('every scene_actions key has an onSceneAction handler, and vice versa', () => {
-  const declared = keysOf(manifest.scene_actions);
-  for (const key of declared) {
-    assert.equal(typeof SCENE_ACTIONS[key], 'function', `scene action "${key}" has no handler`);
-  }
-  for (const key of Object.keys(SCENE_ACTIONS)) {
-    assert.ok(declared.includes(key), `handler "${key}" is not declared in scene_actions`);
+test('every scene_actions key has an onSceneAction handler', async () => {
+  assert.deepEqual(keysOf(manifest.scene_actions), [SCENE_ACTION]);
+  for (const key of keysOf(manifest.scene_actions)) {
+    assert.ok(await registered.sceneAction(key), `scene action "${key}" has no handler`);
   }
 });
 
-test('every widgets key has an onWidgetGet handler, and vice versa', () => {
-  const declared = keysOf(manifest.widgets);
-  for (const key of declared) {
-    assert.equal(typeof WIDGETS[key]?.get, 'function', `widget "${key}" has no content handler`);
-  }
-  for (const key of Object.keys(WIDGETS)) {
-    assert.ok(declared.includes(key), `widget "${key}" is not declared in widgets`);
+test('every widgets key has an onWidgetGet handler, and vice versa', async () => {
+  assert.deepEqual(keysOf(manifest.widgets).sort(), Object.values(WIDGET).sort());
+  for (const key of keysOf(manifest.widgets)) {
+    assert.ok(await registered.widget(key), `widget "${key}" has no content handler`);
   }
 });
 
-test('every scene trigger the code fires is declared in scene_triggers, and vice versa', () => {
+test('the scene trigger the code fires is the one declared', () => {
   // An undeclared key is a 404 on publishSceneEvent; a declared key nobody
   // fires is a dead card in the scene editor.
-  const declared = keysOf(manifest.scene_triggers);
-  for (const key of SCENE_TRIGGER_KEYS) {
-    assert.ok(declared.includes(key), `trigger "${key}" is fired but not declared`);
-  }
-  for (const key of declared) {
-    assert.ok(SCENE_TRIGGER_KEYS.includes(key), `trigger "${key}" is declared but never fired`);
-  }
+  assert.deepEqual(keysOf(manifest.scene_triggers), [RAIN_TRIGGER]);
+  const [trigger] = manifest.scene_triggers;
+  assert.deepEqual(keysOf(trigger.fields), ['device', 'within']);
+  assert.deepEqual(keysOf(trigger.variables), ['place', 'minutes', 'intensity', 'probability']);
+});
+
+test('the select options of the configuration are the values the code accepts', () => {
+  const options = (key) =>
+    manifest.config_schema.find((f) => f.key === key).options.map((o) => o.value);
+  assert.deepEqual(options('language'), LANGUAGES);
+  assert.deepEqual(options('location_mode'), LOCATION_MODES);
+  assert.deepEqual(options('refresh_minutes'), REFRESH_MINUTES);
+});
+
+test('reading the houses of Gladys is declared (location: true)', () => {
+  assert.equal(manifest.location, true);
+  assert.deepEqual(manifest.transports, ['cloud']);
+  assert.equal(manifest.type, 'device');
+  assert.equal(manifest.name, 'Tomorrow.io');
 });
 
 test('config_schema defaults stay consistent with DEFAULT_CONFIG', () => {
@@ -135,7 +155,7 @@ test('config_schema defaults stay consistent with DEFAULT_CONFIG', () => {
 
 test('section fields are purely presentational', () => {
   const sections = manifest.config_schema.filter((f) => f.type === 'section');
-  assert.ok(sections.length > 0, 'the template demonstrates at least one section block');
+  assert.ok(sections.length > 0, 'the configuration opens with a section block');
   for (const section of sections) {
     // A section stores NO value: declaring `required`, `default` or
     // `placeholder` on it rejects the manifest, and its key must never leak
@@ -160,7 +180,7 @@ test('section fields are purely presentational', () => {
 
 test('dynamic selects declare a source and no static options', () => {
   const dynamicSelects = allFields.filter((f) => f.source !== undefined);
-  assert.ok(dynamicSelects.length > 0, 'the template demonstrates a dynamic select');
+  assert.ok(dynamicSelects.length > 0, 'the places are picked through a dynamic select');
   for (const field of dynamicSelects) {
     assert.equal(field.source, 'devices', 'the only core-defined source in V1 is "devices"');
     assert.equal(
@@ -196,7 +216,7 @@ test('the catalog description holds 10 to 100 characters per language', () => {
 test('field placeholders are multi-language objects', () => {
   // Like `label` and `description`: a plain string rejects the manifest.
   const withPlaceholder = allFields.filter((f) => f.placeholder !== undefined);
-  assert.ok(withPlaceholder.length > 0, 'the template demonstrates a placeholder');
+  assert.ok(withPlaceholder.length > 0, 'the coordinates show an example');
   for (const field of withPlaceholder) {
     assert.equal(typeof field.placeholder, 'object', `field "${field.key}": placeholder`);
     assert.ok(field.placeholder.en, `field "${field.key}": placeholder needs an English text`);
