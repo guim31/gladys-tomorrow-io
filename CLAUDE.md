@@ -31,16 +31,22 @@ pushing.
 ## Architecture
 
 ```
-index.js                          SDK wiring only: handlers registered before connect()
-src/devices/index.js              registry of the device blueprints + dispatch helpers
-src/devices/<type>.js             one device type per file (buildDevice, onPoll, onSetValue...)
-src/scenes.js                     scene action handlers (manifest `scene_actions`)
-src/widgets.js                    dashboard widget handlers (manifest `widgets`)
+index.js                          SDK wiring only: createApp(gladys).register(), then connect()
+src/app.js                        places, refresh loop, states, scene trigger/action, widgets, Test
+src/tomorrow.js                   Tomorrow.io v4 client (realtime, forecast, premium timelines)
+src/model.js                      pure: answers -> readings, rain outlook, daily forecast
+src/devices.js                    place -> Gladys device (features) and states
+src/places.js                     houses of Gladys (location: true) and custom coordinates
+src/quota.js                      planned interval, call ledger (kept in /data)
+src/rain.js                       "rain expected within N minutes" windows (kept in /data)
+src/store.js                      /data/state.json
+src/widgets.js                    "forecast" and "rain" widget contents (pure builders)
+src/i18n.js                       every text in en, fr, de, es
 src/config.js                     DEFAULT_CONFIG (mirrors the manifest defaults) + normalization
-src/weather.js                    example driver (Open-Meteo)
-gladys-assistant-integration.json manifest: name, config_schema, actions, image...
-docs/en.md, docs/fr.md            user documentation, re-hosted by Gladys (mandatory)
-test/                             node --test, against the SDK's fake Gladys (integration-sdk/testing)
+gladys-assistant-integration.json manifest: name, config_schema, actions, widgets...
+docs/{en,fr,de,es}.md             user documentation, re-hosted by Gladys (same sections)
+scripts/probe.mjs                 read-only probe of the real API (orchestrator, with network)
+test/                             node --test, against the SDK's fake Gladys + a fake fetch
 .github/scripts/release.mjs       release helpers (manifest bump, changelog), tested in test/
 ```
 
@@ -70,8 +76,10 @@ test/                             node --test, against the SDK's fake Gladys (in
   `type: "provider"`: 5.1.0). `test/manifest.test.js` ties the manifest to the
   code (defaults, action, scene and widget handlers): change both sides
   together.
-- **User-facing text** is bilingual (English and French): action messages,
-  manifest texts, and `docs/en.md` / `docs/fr.md`, kept in sync.
+- **User-facing text** exists in four languages (English, French, German with
+  "du", Spanish with "usted"): action messages, widget texts, feature names,
+  manifest texts, and `docs/{en,fr,de,es}.md` with the same sections.
+  `test/i18n.test.js` enforces it.
 - **Style.** Prettier formats, ESLint catches mistakes. Comments explain why,
   in English. Tests never touch the network.
 
@@ -233,3 +241,45 @@ long, et sur un « Sie »/« Ihr… » de politesse en allemand. Le store exige 
 - Docs `en`, `fr`, `de`, `es` avec les mêmes sections.
 - Chauffe, ouverture, sécurité : ne rien rendre pilotable « comme un thermostat » ou par un assistant
   vocal quand une erreur serait dangereuse (leçon d'OctoPrint).
+
+## Intégration Tomorrow.io (notes propres à ce dépôt)
+
+**API utilisée** (v4, lecture seule, unités `metric`, clé dans l'en-tête `apikey`, jamais dans l'URL) :
+
+- `GET /v4/weather/realtime?location=lat,lon` → `{ data: { time, values }, location }`.
+- `GET /v4/weather/forecast?location=lat,lon` **sans `timesteps`** → `{ timelines: { minutely?,
+hourly, daily } }`, entrées `{ time, values }`. Un seul appel apporte toutes les échelles que
+  l'offre donne (d'après le support Tomorrow.io : « 1 endpoint + 1 location = 1 call »).
+- `POST /v4/timelines` (`fields`, `timesteps: ['current']`) pour les couches premium : qualité de
+  l'air, pollens, indice d'incendie. **Absentes de l'offre gratuite** (couches « Core » seulement,
+  confirmé par la doc Home Assistant) : un 400/403 sur cet appel, après un appel cœur réussi avec la
+  même clé, est classé `plan` et redemandé 24 h plus tard.
+- Les précipitations du Weather API sont découpées (`rainIntensity`, `snowIntensity`,
+  `sleetIntensity`, `freezingRainIntensity`) ; le Timelines API (pytomorrowio, fixtures) donne
+  `precipitationIntensity`. `src/model.js` lit les deux formes.
+- `pollutantO3` est en ppb : converti en µg/m³ (×1,96), seule unité qu'offre `o3-sensor`.
+
+**Quota de l'offre gratuite** : 500 appels/jour (remise à zéro 00:00 UTC), 25/heure (à l'heure pile),
+3/seconde ; pas d'en-têtes de quota hors offre Enterprise. 2 appels par lieu et relevé (3 avec le
+premium). L'intervalle est allongé pour tenir dans 90 % des deux limites, un registre d'appels dans
+`/data/state.json` survit aux redémarrages, un 429 met en pause jusqu'à `Retry-After` ou l'heure
+suivante. Seuls les lieux dont l'appareil est ajouté sont relevés. Widgets, action de scène et
+`onDeviceCreated` réutilisent le dernier relevé : jamais d'appel.
+
+**Pièges et choix** :
+
+- **Non vérifié faute de compte et de réseau** (le proxy de session bloque `api.tomorrow.io` et
+  `docs.tomorrow.io`) : forme exacte des réponses du Weather API, présence du minutely dans l'offre
+  gratuite, corps d'erreur d'une couche premium refusée. Les tests partent des vraies réponses
+  Timelines de pytomorrowio converties ; `scripts/probe.mjs` tranche sur le vrai service.
+- Couples sans équivalent Gladys : nébulosité et probabilité de pluie en `counter-sensor/integer`
+  (%), pollens et indice d'incendie en `risk/integer`, direction du vent en `angle-sensor/integer`.
+- Identifiants : `place:house-<selector>` pour une maison, `place:custom` pour les coordonnées
+  (déplacer les coordonnées garde l'appareil et son historique).
+- Le déclencheur `rain_expected` a trois fenêtres (15, 30, 60 min) : un filtre de scène ne fait
+  qu'égalité, le seuil est donc porté par la fenêtre. Première évaluation sans état récent = ligne de
+  base (aucun événement), comme les alertes météo du cœur.
+- Le type `weather` du cœur (fournisseur pour le widget météo natif et les alertes) n'a ni appareils
+  ni widgets d'intégration : un manifeste n'a qu'un `type`, ce dépôt reste `device` comme demandé.
+- Le garde-fou de `test/i18n.test.js` refuse « Sie » même au sens de « elle » : tourner la phrase
+  autrement en allemand.

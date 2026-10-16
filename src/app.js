@@ -274,7 +274,14 @@ export function createApp({
       snapshot.premium = previous.premium;
     }
     snapshots.set(place.key, snapshot);
-    await publishPlace(place);
+    try {
+      await publishPlace(place);
+      issues.ok('publish', 'Gladys accepts the states again');
+    } catch (err) {
+      // Gladys refused the states (rate limit, restart): the reading is
+      // fine, the SDK sends the states again at the next refresh.
+      issues.fail('publish', `Publishing the states failed (${err.message})`);
+    }
     await fireRain(place, snapshot);
     logger.debug(`${place.key}: refreshed`);
     return true;

@@ -259,3 +259,21 @@ test('a normal cycle writes nothing at info level, and no secret ever reaches th
     assert.ok(!line.includes(API_KEY), `the API key leaked: ${line}`);
   }
 });
+
+test('a refusal of Gladys on the states is not reported as a Tomorrow.io outage', async (t) => {
+  const { gladys, lines } = await createWorld(t, { connect: false });
+  let refuse = true;
+  const publish = gladys.publishStates.bind(gladys);
+  t.mock.method(gladys, 'publishStates', async (states) => {
+    if (refuse) {
+      throw new Error('RATE_LIMIT_EXCEEDED: max 300 states per minute');
+    }
+    return publish(states);
+  });
+  await gladys.connect();
+  assert.equal(gladys.fake.connectionStatus.connected, true, 'Tomorrow.io answered');
+  assert.equal(lines.filter((l) => l.includes('Publishing the states failed')).length, 1);
+  refuse = false;
+  await advance(t, 15);
+  assert.equal(gladys.fake.lastState(TEMPERATURE), 23.6, 'sent again at the next refresh');
+});

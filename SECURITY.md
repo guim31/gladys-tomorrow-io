@@ -30,6 +30,21 @@ Gladys before reporting a problem.
 
 In scope: the code of this repository and the Docker image it publishes.
 
+What the integration handles:
+
+- **The Tomorrow.io API key**, stored by Gladys in the integration
+  configuration (a `secret` field, never sent back to the browser). It is sent
+  to `api.tomorrow.io` only, in the `apikey` header (never in a URL), and never
+  written to the logs nor to `/data`.
+- **The coordinates of the houses of Gladys** (`location: true`): read from
+  Gladys to ask Tomorrow.io for the weather of each place, and sent to
+  `api.tomorrow.io` only, rounded to four decimals.
+- **`/data/state.json`**: the times of the calls of the last 24 hours (the
+  quota count) and which rain alerts were already fired. No secret, no
+  coordinate.
+- **Network**: outgoing HTTPS to `api.tomorrow.io` only. The integration opens
+  no port and controls nothing: every feature is read-only.
+
 Out of scope: Gladys Assistant itself (see its
 [security policy](https://github.com/GladysAssistant/Gladys/security/policy)),
-and the third-party services and devices the integration talks to.
+and the Tomorrow.io service.
